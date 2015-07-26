@@ -1,0 +1,87 @@
+---
+title: "MachineLearning"
+author: "Robert Tuck"
+date: "July 26, 2015"
+output: html_document
+---
+
+### Overview
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+
+### Data
+Download the data and load into data frames
+
+```{r}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./pml-training.csv", method="curl")
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./pml-testing.csv", method="curl")
+
+trainingDataRaw = read.csv("pml-training.csv", na.strings=c("", "NA", "NULL"))
+evalDataRaw = read.csv("pml-testing.csv", na.strings=c("", "NA", "NULL"))
+````
+initialize the libraries we are going to use and set the seed
+```{r}
+library(caret)
+set.seed(225)
+```
+
+### Data Processing
+To try and make our prediction algorithm more accurate, we can take steps to eliminate variables that appear to make little or now contribution to our prediction.
+
+The first step would be removing values that have a large number of NA values.  
+The lack of data in these variables would not contribute and would make it difficult to interporlate values to replace the NA values (repeat for evaluation data)
+
+```{r}
+trainingDataNoNA <- trainingDataRaw[ , colSums(is.na(trainingDataRaw)) == 0]
+evalDataNoNA <- evalDataRaw[ , colSums(is.na(evalDataRaw)) == 0]
+```
+
+This removes a large number of variables, but we can remove more.  There are a few variables that are unlikely to be related to the dependent variable.  Items such as username and timestamp are unlike to affect the prediction of how well someone performs an exercise. (Do the same for the evaluation data)
+
+```{r}
+remove = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+cleanData <- trainingDataNoNA[, -which(names(trainingDataNoNA) %in% remove)]
+cleanEvalData <- evalDataNoNA[, -which(names(evalDataNoNA) %in% remove)]
+```
+
+Now that we've eliminated a good number of variables, let's create a training and testing dataset from our processed training data.
+
+```{r}
+inTrain <- createDataPartition(cleanData$classe, p=0.7, list=F)
+training <- cleanData[inTrain,]
+testing <- cleanData[-inTrain,]
+```
+
+
+
+### Random Forest
+Let's try a Random Forest model
+
+```{r}
+fCtrl <- trainControl(allowParallel=T, method="cv", number=4)
+model <- train(classe ~ ., data=training, model="rf", trControl=fCtrl)
+predictions <- predict(model, newdata=testing)
+```
+
+Compare the predictions to our testing set
+```{r}
+sum(predictions == testing$classe) / length(predictions)
+```
+Our model is 99.4% accurate against our test set.
+
+Let's take a look at a confusion matrix as well
+
+```{r}
+confusionMatrix(testing$classe, predictions)$table
+```
+This further illustrates the relative accuracy of our model vs our test-cases.
+
+Let's try it against our evaluation data
+
+```{r}
+evalPredictions <- predict(model, newdata=cleanEvalData)
+evalPredictions
+```
+
+
+
